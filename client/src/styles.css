@@ -1,0 +1,217 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0b1220;
+}
+
+html, body, #root { height: 100%; }
+body { background: var(--bg); color: white; }
+
+.btn {
+  @apply inline-flex items-center gap-2 px-3 py-2 rounded-md bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed;
+  transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+
+.btn-primary {
+  @apply bg-gradient-to-br from-purple-500 to-indigo-600 text-white px-4 py-2 rounded-full shadow-lg hover:from-purple-400 hover:to-indigo-500;
+  transition: transform 180ms ease, box-shadow 180ms ease, filter 160ms ease;
+}
+
+.btn-primary:hover {
+  transform: translateY(-3px) scale(1.02);
+  filter: brightness(1.03) saturate(1.03);
+}
+
+.btn-ghost {
+  @apply text-slate-300 border border-border px-4 py-2 rounded-md bg-transparent;
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+/* Larger button variants for editor/header */
+.btn-lg {
+  @apply px-4 py-2 text-sm rounded-md;
+  font-weight: 600;
+}
+
+.btn-sm {
+  @apply px-2 py-1 text-xs rounded;
+}
+
+.header-btn {
+  @apply px-3 py-1.5 text-sm rounded-md;
+}
+
+.btn-outline {
+  @apply text-slate-300 border border-border px-3 py-2 rounded-md bg-transparent;
+}
+
+.text-gradient {
+  background: linear-gradient(90deg,#38bdf8 0%,#7c3aed 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.card {
+  @apply bg-card border border-border rounded-lg;
+  transition: transform 200ms cubic-bezier(.2,.9,.25,1), box-shadow 200ms ease, border-color 180ms ease;
+}
+
+.card:hover,
+.card-hover:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 12px 30px rgba(2,6,23,0.6);
+  border-color: rgba(255,255,255,0.06);
+}
+
+.input {
+  @apply bg-slate-800 border border-border rounded-md px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500;
+  transition: box-shadow 140ms ease, transform 140ms ease, border-color 140ms ease;
+}
+
+/* Panel layout helpers used on the room/editor page */
+.panel {
+  background: linear-gradient(180deg, rgba(7,9,12,0.6), rgba(6,8,12,0.5));
+  border-right: 1px solid rgba(255,255,255,0.03);
+  transition: width 220ms ease, min-width 220ms ease;
+}
+.panel .panel-header {
+  @apply px-4 py-3 border-b border-border flex items-center justify-between;
+}
+.panel .panel-body {
+  @apply p-3 overflow-auto;
+}
+
+/* Tabs: emphasize on editor page */
+.tablist { @apply flex gap-2 border-b border-border px-4 pt-3; }
+.tab { @apply px-4 py-2 rounded-t-md bg-slate-800/40 hover:bg-slate-800/60 text-sm font-medium; }
+.tab.active { @apply bg-slate-900 border-x border-t border-border -mb-px; }
+
+/* Resizer grips between panels */
+.resizer {
+  background: transparent;
+}
+.resizer-vertical {
+  width: 8px;
+  cursor: col-resize;
+  transition: background-color 120ms ease;
+}
+.resizer-vertical:hover {
+  background: rgba(255,255,255,0.02);
+}
+
+/* For touch / narrow screens make resizer easier to grab */
+@media (max-width: 640px) {
+  .resizer-vertical { width: 14px; }
+}
+
+/* Editor tab strip styling (VS Code like) */
+.editor-tab-strip {
+  @apply flex items-center gap-2;
+  overflow-x: auto;
+}
+.editor-tab {
+  @apply inline-flex items-center gap-2 rounded-t-md bg-slate-800/40 hover:bg-slate-800/60;
+  padding: 0.35rem 0.9rem; /* wider tabs */
+  min-width: 140px; /* make tabs longer */
+  max-width: 320px;
+  white-space: nowrap;
+}
+.editor-tab button { @apply text-sm truncate; }
+.editor-tab .tab-close { @apply ml-2 px-2 py-0.5 text-xs rounded bg-transparent hover:bg-slate-700; }
+.editor-tab.active {
+  @apply bg-slate-900 border-x border-t border-border;
+  box-shadow: 0 -4px 12px rgba(2,6,23,0.6) inset;
+}
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Modal styles */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2,6,23,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  z-index: 60;
+}
+.modal {
+  width: 100%;
+  max-width: 640px;
+  background: linear-gradient(180deg, rgba(12,14,18,0.95), rgba(6,8,12,0.96));
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  box-shadow: 0 10px 40px rgba(2,6,23,0.7);
+  transform: translateY(0);
+}
+.modal-header { display: flex; align-items: center; justify-content: space-between; }
+.modal-actions { display: flex; align-items: center; }
+
+
+.tablist { @apply flex gap-2 border-b border-border px-4 pt-3; }
+.tab { @apply px-3 py-1.5 rounded-t-md bg-slate-800/40 hover:bg-slate-800/60; }
+.tab.active { @apply bg-slate-900 border-x border-t border-border -mb-px; }
+
+/* Scrollbar styling for the editor tabs row */
+.tabs-container::-webkit-scrollbar {
+  height: 8px;
+}
+.tabs-container::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.45);
+  border-radius: 6px;
+}
+.tabs-container::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.85);
+  border-radius: 6px;
+}
+.tabs-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.95);
+}
+
+/* Firefox */
+.tabs-container {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(71,85,105,0.85) rgba(15,23,42,0.45);
+}
+
+/* Optional: visually hide the scrollbar but keep scrolling functional. Add the class `hide-scrollbar` to `.tabs-container` if desired. */
+.tabs-container.hide-scrollbar::-webkit-scrollbar { display: none; }
+.tabs-container.hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Prevent vertical scrolling in the tabs row and keep tabs vertically centered.
+   This reduces the visible tab height so the tab strip never produces a vertical scrollbar. */
+.tabs-container {
+  display: flex; /* already used, but ensure flex alignment */
+  align-items: center; /* vertically center tab items */
+  min-height: 40px;
+  max-height: 48px;
+  overflow-y: hidden; /* important: hide any vertical overflow */
+}
+
+.tabs-container .tab-item {
+  display: inline-flex;
+  align-items: center;
+  /* slightly reduced vertical padding to keep tabs compact */
+  padding-top: 0.25rem; /* 4px */
+  padding-bottom: 0.25rem; /* 4px */
+}
+
+/* Ensure close button and icons align in compact mode */
+.tabs-container .tab-item svg { vertical-align: middle; }
+.tabs-container .tab-item button { display: inline-flex; align-items: center; justify-content: center; }
+
+/* Remote cursor visuals added by MonacoEditor overlays */
+.remote-cursor-decoration {
+  /* fallback thin caret indicator */
+  border-left: 2px solid rgba(250,180,50,0.9);
+}
+.remote-cursor-label {
+  transform: translate(0,0);
+  transition: transform 120ms linear, opacity 120ms linear;
+  box-shadow: 0 6px 18px rgba(2,6,23,0.6);
+  opacity: 0.95;
+}
