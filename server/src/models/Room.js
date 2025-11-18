@@ -25,6 +25,10 @@ const RoomSchema = new Schema({
   files: { type: [FileSchema], default: [] },
   folders: { type: [FolderSchema], default: [] },
   messages: { type: [MessageSchema], default: [] }
+  ,
+  // Whiteboards: array of per-file whiteboard snapshots. Each entry holds
+  // the fileId and an objects array representing shapes/text placed on the board.
+  whiteboards: { type: [{ fileId: String, objects: { type: Array, default: [] }, meta: { type: Object, default: {} } }], default: [] }
 });
 
 export default mongoose.model('Room', RoomSchema);

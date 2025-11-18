@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { socket } from '../lib/socket.js';
 
-export default function Whiteboard({ roomId }) {
+export default function Whiteboard({ roomId, fileId }) {
   const canvasRef = useRef(null);
   const [ctx, setCtx] = useState(null);
   const drawing = useRef(false);
@@ -49,9 +49,30 @@ export default function Whiteboard({ roomId }) {
     updateCanvasStyle(c);
     setCtx(c);
 
-    const onRemote = (ev) => {
+    const onRemote = (payload) => {
+      // payload: { fileId, event }
+      try {
+        if (!payload || payload.fileId !== fileId) return; // ignore events for other files
+      } catch (e) { return; }
+      const ev = payload.event;
+      if (!ev) return;
       if (ev.type === 'stroke') {
+        // draw immediately and persist the segment into objects so it survives reloads
         drawRemoteStroke(c, ev);
+        try {
+          const seg = {
+            id: Date.now().toString(),
+            type: 'stroke',
+            from: ev.from,
+            to: ev.to,
+            color: ev.color,
+            size: ev.size,
+            mode: ev.mode
+          };
+          setObjects(prev => [...prev, seg]);
+        } catch (err) {
+          console.error('Failed to append remote stroke to objects', err, ev);
+        }
       } else if (ev.type === 'shape') {
         const newObject = {
           id: Date.now().toString(),
@@ -105,7 +126,33 @@ export default function Whiteboard({ roomId }) {
 
     socket.on('whiteboard:event', onRemote);
     return () => socket.off('whiteboard:event', onRemote);
-  }, [roomId, isDarkMode]);
+  }, [roomId, isDarkMode, fileId]);
+
+    // Load saved whiteboard snapshot for the active file when fileId changes
+    useEffect(() => {
+      if (!fileId) return;
+      socket.emit('whiteboard:get', { roomId, fileId }, (res) => {
+        try {
+          setObjects(res?.objects || []);
+          if (res?.meta && typeof res.meta.dark === 'boolean') setIsDarkMode(res.meta.dark);
+        } catch (err) {
+          console.error('Failed to load whiteboard snapshot', err, res);
+        }
+      });
+    }, [roomId, fileId]);
+
+    // Persist whiteboard snapshot (debounced) when objects or meta change
+    useEffect(() => {
+      if (!fileId) return;
+      const t = setTimeout(() => {
+        try {
+          socket.emit('whiteboard:save', { roomId, fileId, objects, meta: { dark: isDarkMode } }, () => {});
+        } catch (err) {
+          console.error('whiteboard:save failed', err);
+        }
+      }, 1000);
+      return () => clearTimeout(t);
+    }, [roomId, fileId, objects, isDarkMode]);
 
   const redrawCanvas = () => {
     if (!ctx) return;
@@ -113,6 +160,23 @@ export default function Whiteboard({ roomId }) {
     clearCanvas(ctx, canvas.width, canvas.height, isDarkMode);
     
     objects.forEach(obj => {
+      if (obj.type === 'stroke') {
+        try {
+          const prevStyle = ctx.strokeStyle;
+          const prevWidth = ctx.lineWidth;
+          ctx.strokeStyle = obj.mode === 'erase' ? (isDarkMode ? '#000000' : '#ffffff') : (obj.color || ctx.strokeStyle);
+          ctx.lineWidth = obj.size || ctx.lineWidth;
+          ctx.beginPath();
+          ctx.moveTo(obj.from.x, obj.from.y);
+          ctx.lineTo(obj.to.x, obj.to.y);
+          ctx.stroke();
+          ctx.strokeStyle = prevStyle;
+          ctx.lineWidth = prevWidth;
+        } catch (err) {
+          console.error('Error drawing stroke during redraw:', err, obj);
+        }
+        return;
+      }
       if (obj.type === 'shape') {
         try {
           drawShape(ctx, obj.shapeType, obj.start, obj.end, obj.color, obj.size);
@@ -157,7 +221,10 @@ export default function Whiteboard({ roomId }) {
     }
   }, [isDarkMode, brushColor, brushSize, drawingMode]);
 
-  const send = (ev) => socket.emit('whiteboard:event', { roomId, event: ev });
+  const send = (ev) => {
+    if (!fileId) return; // don't send if no file context
+    socket.emit('whiteboard:event', { roomId, fileId, event: ev });
+  };
 
   // Drawing functions (keep existing drawShape, drawArrow, etc. functions)
   // Basic shape drawing implementation (helpers)
@@ -604,7 +671,22 @@ export default function Whiteboard({ roomId }) {
     if (drawing.current && ctx && activeTool === 'freehand') {
       ctx.lineTo(x, y);
       ctx.stroke();
-      
+      // persist this stroke segment locally so autosave captures it
+      try {
+        const seg = {
+          id: Date.now().toString(),
+          type: 'stroke',
+          from: { x: lastPoint.current.x, y: lastPoint.current.y },
+          to: { x, y },
+          color: brushColor,
+          size: brushSize,
+          mode: drawingMode
+        };
+        setObjects(prev => [...prev, seg]);
+      } catch (err) {
+        console.error('Failed to append local stroke to objects', err);
+      }
+
       send({
         type: 'stroke',
         from: { x: lastPoint.current.x, y: lastPoint.current.y },
@@ -613,7 +695,7 @@ export default function Whiteboard({ roomId }) {
         size: brushSize,
         mode: drawingMode
       });
-      
+
       lastPoint.current = { x, y };
     }
   };
@@ -661,6 +743,14 @@ export default function Whiteboard({ roomId }) {
     setObjects([]);
     setSelectedObject(null);
     send({ type: 'clear' });
+    // persist cleared state immediately for this file
+    if (fileId) {
+      try {
+        socket.emit('whiteboard:save', { roomId, fileId, objects: [], meta: { dark: isDarkMode } }, () => {});
+      } catch (err) {
+        console.error('whiteboard:save failed after clear', err);
+      }
+    }
   };
 
   const toggleDarkMode = () => setIsDarkMode(!isDarkMode);

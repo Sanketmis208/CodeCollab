@@ -328,8 +328,8 @@ export default function Room({ user, setUser }) {
           </button>
         </div>
         {!collapsed && (
-          <div className="flex-1 overflow-hidden">
-            <FileExplorer roomId={roomId} files={files} setFiles={setFiles} setActiveFileId={openFile} />
+            <div className="flex-1 overflow-hidden">
+            <FileExplorer roomId={roomId} files={files} setFiles={setFiles} setActiveFileId={openFile} folders={folders} setFolders={setFolders} />
           </div>
         )}
       </div>
@@ -580,7 +580,7 @@ export default function Room({ user, setUser }) {
                 <div className="h-full flex items-center justify-center text-slate-500">No file open</div>
               ) : null}
               {tab === 'whiteboard' && (
-                <Whiteboard roomId={roomId} />
+                <Whiteboard roomId={roomId} fileId={activeFileId} />
               )}
 
               {tab === 'preview' && (

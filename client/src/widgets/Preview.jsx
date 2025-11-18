@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 export default function Preview({ language = 'html', content = '', fileName = 'file', previewTrigger = 0 }) {
+  const [showPreview, setShowPreview] = useState(language !== 'python');
   const iframeRef = useRef(null);
   const [logs, setLogs] = useState([]);
   const [pyodideReady, setPyodideReady] = useState(false);
@@ -132,6 +133,13 @@ export default function Preview({ language = 'html', content = '', fileName = 'f
     return styles[level] || styles.log;
   };
 
+  // Single text block of all logs joined by newline for compact console view
+  const allLogsText = logs.map(l => {
+    const prefix = (l.level || 'log').toUpperCase();
+    const text = (l.args || []).map(a => (typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a))).join(' ');
+    return `[${prefix}] ${text}`;
+  }).join('\n');
+
   return (
     <div className="h-full flex flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Preview Header */}
@@ -170,6 +178,14 @@ export default function Preview({ language = 'html', content = '', fileName = 'f
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowPreview(s => !s)}
+              className="px-3 py-1 rounded-lg text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 border border-slate-600/50 transition-all duration-200"
+              title={showPreview ? 'Hide preview area' : 'Show preview area'}
+            >
+              {showPreview ? 'Hide Preview' : 'Show Preview'}
+            </button>
+
             <button
               onClick={clearLogs}
               className="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 border border-slate-600/50 hover:border-slate-500/50 transition-all duration-200 flex items-center gap-2"
@@ -212,26 +228,28 @@ export default function Preview({ language = 'html', content = '', fileName = 'f
       {/* Main Content */}
       <div className="flex-1 min-h-0 flex">
         {/* Preview Area */}
-        <div className="flex-1 h-full border-r border-slate-700/50 relative p-2 min-w-0">
-          <div className="absolute inset-0 bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center rounded-lg overflow-hidden">
-            <div className="text-center text-slate-500">
-              <svg className="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-              <p className="text-sm">Preview will appear here</p>
+        {showPreview ? (
+          <div className="flex-1 h-full border-r border-slate-700/50 relative p-2 min-w-0">
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center rounded-lg overflow-hidden">
+              <div className="text-center text-slate-500">
+                <svg className="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                <p className="text-sm">Preview will appear here</p>
+              </div>
             </div>
+            <iframe 
+              ref={iframeRef} 
+              title="preview" 
+              sandbox="allow-scripts" 
+              className="w-full h-full bg-white relative z-10 rounded-lg shadow-xl" 
+              style={{ boxSizing: 'border-box', display: 'block' }}
+            />
           </div>
-          <iframe 
-            ref={iframeRef} 
-            title="preview" 
-            sandbox="allow-scripts" 
-            className="w-full h-full bg-white relative z-10 rounded-lg shadow-xl" 
-            style={{ boxSizing: 'border-box', display: 'block' }}
-          />
-        </div>
+        ) : null}
 
         {/* Console Panel */}
-        <div className="w-96 h-full flex flex-col border-l border-slate-700/50 bg-slate-800/50 backdrop-blur-sm">
+        <div className={`${showPreview ? 'w-96' : 'flex-1'} h-full flex flex-col border-l border-slate-700/50 bg-slate-800/50 backdrop-blur-sm`}>
           <div className="flex items-center justify-between p-3 border-b border-slate-700/50">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
               <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -255,7 +273,7 @@ export default function Preview({ language = 'html', content = '', fileName = 'f
             </div>
           </div>
           
-          <div className="flex-1 overflow-auto p-3 space-y-2">
+          <div className="flex-1 overflow-auto p-3">
             {logs.length === 0 ? (
               <div className="text-center text-slate-500 py-8">
                 <svg className="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -264,30 +282,9 @@ export default function Preview({ language = 'html', content = '', fileName = 'f
                 <p className="text-sm">Console output will appear here</p>
               </div>
             ) : (
-              logs.map(l => (
-                <div 
-                  key={l.id} 
-                  className={`p-3 rounded-lg border text-sm font-mono break-words ${getLogLevelStyles(l.level)}`}
-                >
-                  <div className="flex items-start gap-2">
-                    <span className="flex-shrink-0 mt-0.5">
-                      {l.level === 'error' && '❌'}
-                      {l.level === 'info' && 'ℹ️'}
-                      {l.level === 'success' && '✅'}
-                      {l.level === 'warn' && '⚠️'}
-                      {l.level === 'log' && '📝'}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      {l.args.map((a, i) => (
-                        <span key={i} className="whitespace-pre-wrap">
-                          {typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)}
-                          {i < l.args.length - 1 ? ' ' : ''}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))
+              <pre className="p-3 rounded-lg border text-sm font-mono whitespace-pre-wrap bg-slate-900 text-slate-100" style={{ whiteSpace: 'pre-wrap' }}>
+                {allLogsText}
+              </pre>
             )}
           </div>
         </div>

@@ -2,28 +2,19 @@ import { useEffect, useRef, useState } from 'react';
 import { socket } from '../lib/socket.js';
 import { downloadProjectAsZip, unzipFileToEntries } from '../lib/projectZip.js';
 
-export default function FileExplorer({ roomId, files, setFiles, setActiveFileId }) {
+export default function FileExplorer({ roomId, files, setFiles, setActiveFileId, folders, setFolders }) {
+  // folders and setFolders are supplied by the parent to avoid a race where
+  // files arrive before folders. The parent is responsible for the initial
+  // fetch (see Room.jsx -> refreshTree) and will update these props when
+  // server emits 'files:updated' or 'folders:updated'.
   const [creating, setCreating] = useState(null);
   const [name, setName] = useState('');
   const [editingFileId, setEditingFileId] = useState(null);
   const [editingName, setEditingName] = useState('');
-  const [folders, setFolders] = useState([]);
+  const [editingFolderId, setEditingFolderId] = useState(null);
+  const [editingFolderName, setEditingFolderName] = useState('');
   const [expanded, setExpanded] = useState(() => new Set());
   const rootInputRef = useRef(null);
-
-  useEffect(() => {
-    if (!roomId) return;
-    refresh();
-
-    const onFolders = () => refresh();
-    const onFiles = () => refresh();
-    socket.on('folders:updated', onFolders);
-    socket.on('files:updated', onFiles);
-    return () => {
-      socket.off('folders:updated', onFolders);
-      socket.off('files:updated', onFiles);
-    };
-  }, [roomId]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -107,6 +98,31 @@ export default function FileExplorer({ roomId, files, setFiles, setActiveFileId 
     });
   };
 
+  const finishFolderRename = (folderId, newName) => {
+    if (!folderId) return;
+    const trimmed = (newName || '').trim();
+    if (!trimmed) { setEditingFolderId(null); setEditingFolderName(''); return; }
+
+    // optimistic UI: update folders
+    setFolders(prev => prev.map(f => f.id === folderId ? { ...f, name: trimmed } : f));
+
+    socket.emit('folder:rename', { roomId, folderId, name: trimmed }, (res) => {
+      if (res?.error) {
+        alert('Rename failed: ' + (res.error || 'unknown'));
+        console.error('folder:rename', res);
+        // revert
+        socket.emit('folders:list', { roomId }, (data) => setFolders(data || []));
+        setEditingFolderId(null);
+        setEditingFolderName('');
+        return;
+      }
+      // refresh folders to ensure timestamps/state
+      socket.emit('folders:list', { roomId }, (data) => setFolders(data || []));
+      setEditingFolderId(null);
+      setEditingFolderName('');
+    });
+  };
+
   return (
     <div className="flex-1 overflow-auto text-sm">
       {/* Compact Header */}
@@ -134,11 +150,23 @@ export default function FileExplorer({ roomId, files, setFiles, setActiveFileId 
           
           {/* Import/Export */}
           <div className="flex gap-1">
-            <button 
+            <button
               className="btn btn-xs px-2 py-1 text-xs hover:bg-slate-700 rounded flex items-center gap-1"
               onClick={async () => {
                 try {
-                  await downloadProjectAsZip(folders, files, `${roomId || 'project'}.zip`);
+                  // Prompt the user for a filename (without path). On browsers that support
+                  // the File System Access API we will also get a system save dialog that
+                  // allows choosing the folder. If that API isn't available the anchor
+                  // download will be used and the browser will handle the save location.
+                  const defaultName = roomId || 'project';
+                  const input = window.prompt('Enter filename for project (without extension):', defaultName);
+                  if (!input) return; // cancelled or empty
+                  let fname = input.trim();
+                  if (!fname) return;
+                  // sanitize filename: remove path separators and characters often invalid in filenames
+                  fname = fname.replace(/[\\/:"*?<>|]+/g, '-');
+                  if (!fname.toLowerCase().endsWith('.zip')) fname += '.zip';
+                  await downloadProjectAsZip(folders, files, fname);
                 } catch (err) {
                   console.error('Download project failed', err);
                   alert('Could not create project zip. See console');
@@ -255,6 +283,11 @@ export default function FileExplorer({ roomId, files, setFiles, setActiveFileId 
             editingName={editingName}
             setEditingName={setEditingName}
             finishRename={finishRename}
+            editingFolderId={editingFolderId}
+            setEditingFolderId={setEditingFolderId}
+            editingFolderName={editingFolderName}
+            setEditingFolderName={setEditingFolderName}
+            finishFolderRename={finishFolderRename}
           />
         ))}
       </div>
@@ -262,7 +295,7 @@ export default function FileExplorer({ roomId, files, setFiles, setActiveFileId 
   );
 }
 
-function Node({ node, level, expanded, toggle, onCreate, onSelect, creating, name, setName, createItem, roomId, files, setFiles, setFolders, editingFileId, setEditingFileId, editingName, setEditingName, finishRename }) {
+function Node({ node, level, expanded, toggle, onCreate, onSelect, creating, name, setName, createItem, roomId, files, setFiles, setFolders, editingFileId, setEditingFileId, editingName, setEditingName, finishRename, editingFolderId, setEditingFolderId, editingFolderName, setEditingFolderName, finishFolderRename }) {
   const pad = { paddingLeft: `${level * 12 + 8}px` };
   const folderInputRef = useRef(null);
 
@@ -289,7 +322,7 @@ function Node({ node, level, expanded, toggle, onCreate, onSelect, creating, nam
         >
           <span className="text-xs w-3">{isOpen ? '▾' : '▸'}</span>
           <FolderIcon size={14} className="text-blue-400 flex-shrink-0" />
-          <span className="truncate text-xs flex-1 min-w-0">{node.name}</span>
+          <span title={node.name} className="truncate text-xs flex-1 min-w-0">{node.name}</span>
           
           {/* Hover Actions */}
           <div className="ml-auto flex gap-0.5 items-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -335,6 +368,13 @@ function Node({ node, level, expanded, toggle, onCreate, onSelect, creating, nam
             >
               <TrashIcon size={12} />
             </button>
+            <button
+              className="btn btn-ghost btn-xs p-1 hover:bg-slate-700 rounded"
+              onClick={(e) => { e.stopPropagation(); setEditingFolderId(node.id); setEditingFolderName(node.name); }}
+              title="Rename folder"
+            >
+              <PencilIcon size={12} />
+            </button>
           </div>
         </div>
         
@@ -360,6 +400,22 @@ function Node({ node, level, expanded, toggle, onCreate, onSelect, creating, nam
                 />
               </div>
             )}
+            {editingFolderId === node.id && (
+              <div className="flex items-center gap-1 px-1 py-1" style={{ paddingLeft: `${(level + 1) * 12 + 8}px` }}>
+                <span className="w-4"><FolderIcon size={12} /></span>
+                <input
+                  className="input input-xs flex-1 px-2 py-1 text-xs"
+                  value={editingFolderName}
+                  onChange={(e) => setEditingFolderName(e.target.value)}
+                  onBlur={() => finishFolderRename(node.id, editingFolderName)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') finishFolderRename(node.id, editingFolderName);
+                    if (e.key === 'Escape') { setEditingFolderId(null); setEditingFolderName(''); }
+                  }}
+                  autoFocus
+                />
+              </div>
+            )}
             {creating?.parentId === node.id && <FocusInput refObj={folderInputRef} />}
             {node.children.map((child) => (
               <Node 
@@ -378,6 +434,16 @@ function Node({ node, level, expanded, toggle, onCreate, onSelect, creating, nam
                 files={files}
                 setFiles={setFiles}
                 setFolders={setFolders}
+                    editingFileId={editingFileId}
+                    setEditingFileId={setEditingFileId}
+                    editingName={editingName}
+                    setEditingName={setEditingName}
+                    finishRename={finishRename}
+                    editingFolderId={editingFolderId}
+                    setEditingFolderId={setEditingFolderId}
+                    editingFolderName={editingFolderName}
+                    setEditingFolderName={setEditingFolderName}
+                    finishFolderRename={finishFolderRename}
               />
             ))}
           </div>
@@ -419,11 +485,18 @@ function Node({ node, level, expanded, toggle, onCreate, onSelect, creating, nam
           autoFocus
         />
       ) : (
-        <span className="truncate text-xs flex-1 min-w-0">{node.name}</span>
+        <span title={node.name} className="truncate text-xs flex-1 min-w-0">{node.name}</span>
       )}
       
       {/* Hover Actions */}
       <div className="ml-auto flex gap-0.5 items-center opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          className="btn btn-ghost btn-xs p-1 hover:bg-slate-700 rounded"
+          onClick={(e) => { e.stopPropagation(); setEditingFileId(node.id); setEditingName(node.name); }}
+          title="Rename file"
+        >
+          <PencilIcon size={12} />
+        </button>
         <button
           className="btn btn-ghost btn-xs p-1 hover:bg-red-500/20 rounded text-red-400"
           onClick={(e) => {
@@ -519,6 +592,15 @@ function TrashIcon({ size = 16, className = "" }) {
       <path d="M3 6h18" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
       <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+function PencilIcon({ size = 16, className = "" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      <path d="M3 21v-3.6L14.6 6.8l3.6 3.6L7 21H3z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M20.7 7.0a1 1 0 0 0 0-1.4L18.4 3.3a1 1 0 0 0-1.4 0l-1.8 1.8 3.6 3.6 1.9-1.7z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }

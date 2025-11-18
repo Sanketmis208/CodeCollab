@@ -33,6 +33,43 @@ export async function createZipBlobFromProject(folders = [], files = []) {
 
 export async function downloadProjectAsZip(folders = [], files = [], filename = 'project.zip') {
   const blob = await createZipBlobFromProject(folders, files);
+
+  // Try to use the File System Access API (showSaveFilePicker) when available.
+  // That prompts the user for both filename and location. If not available or
+  // the user cancels, fall back to the classic anchor download.
+  try {
+    // feature-detect
+    const hasPicker = typeof window !== 'undefined' && 'showSaveFilePicker' in window;
+    if (hasPicker) {
+      try {
+        const opts = {
+          suggestedName: filename,
+          types: [
+            {
+              description: 'ZIP archive',
+              accept: { 'application/zip': ['.zip'] },
+            },
+          ],
+        };
+        // @ts-ignore - showSaveFilePicker may not be typed in all environments
+        const handle = await window.showSaveFilePicker(opts);
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return;
+      } catch (err) {
+        // If user cancelled or the call failed, fall back to the anchor method below.
+        // eslint-disable-next-line no-console
+        console.debug('showSaveFilePicker failed or cancelled, falling back to anchor download', err);
+      }
+    }
+  } catch (err) {
+    // ignore and fallback
+    // eslint-disable-next-line no-console
+    console.debug('File System Access API check failed', err);
+  }
+
+  // Fallback: classic anchor-based download (browser chooses folder or uses configured downloads path)
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

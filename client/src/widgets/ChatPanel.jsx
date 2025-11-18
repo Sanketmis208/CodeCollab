@@ -14,8 +14,16 @@ export default function ChatPanel({ roomId }) {
       setMessages((prev) => [...prev, msg]);
     };
 
+    const onCleared = () => {
+      setMessages([]);
+    };
+
     socket.on('chat:new', onNew);
-    return () => socket.off('chat:new', onNew);
+    socket.on('chat:cleared', onCleared);
+    return () => {
+      socket.off('chat:new', onNew);
+      socket.off('chat:cleared', onCleared);
+    };
   }, [roomId]);
 
   useEffect(() => {
@@ -31,7 +39,30 @@ export default function ChatPanel({ roomId }) {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="px-4 py-3 border-b border-border">Chat</div>
+      <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+        <div>Chat</div>
+        <div className="flex items-center gap-2">
+          <button
+            className="btn btn-ghost btn-xs text-xs"
+            title="Clear chat"
+            onClick={() => {
+              const ok = window.confirm('Clear all chat messages for this room? This cannot be undone.');
+              if (!ok) return;
+              socket.emit('chat:clear', { roomId }, (res) => {
+                if (res?.error) {
+                  alert('Could not clear chat: ' + (res.error || 'unknown'));
+                  console.error('chat:clear', res);
+                  return;
+                }
+                // optimistic clear; server will also emit 'chat:cleared' to everyone
+                setMessages([]);
+              });
+            }}
+          >
+            Clear
+          </button>
+        </div>
+      </div>
       <div className="flex-1 overflow-auto p-4 space-y-3">
         {messages.map((m) => (
           <div key={m.id} className="text-sm">

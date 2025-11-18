@@ -59,7 +59,9 @@ async function getOrCreateRoom(roomId, name = 'Untitled Room', createdBy = 'syst
         participants: new Set(persisted.participants || []),
         files: new Map((persisted.files || []).map(f => [f.id, f])),
         folders: new Map((persisted.folders || []).map(f => [f.id, f])),
-        messages: persisted.messages || []
+        messages: persisted.messages || [],
+        // load whiteboards into an in-memory map keyed by fileId
+        whiteboards: new Map((persisted.whiteboards || []).map(w => [w.fileId, { fileId: w.fileId, objects: w.objects || [], meta: w.meta || {} }]))
       };
       rooms.set(roomId, r);
       return r;
@@ -78,7 +80,8 @@ async function getOrCreateRoom(roomId, name = 'Untitled Room', createdBy = 'syst
     participants: new Set(),
     files: new Map(),
     folders: new Map(),
-    messages: []
+    messages: [],
+    whiteboards: new Map()
   };
   rooms.set(roomId, newRoom);
   try {
@@ -273,6 +276,30 @@ io.on('connection', (socket) => {
     cb?.({ ok: true });
   });
 
+  // Clear chat messages for a room (in-memory + persist)
+  socket.on('chat:clear', async ({ roomId }, cb) => {
+    const session = users.get(socket.id);
+    if (!session) return cb?.({ error: 'Not authenticated' });
+    const room = rooms.get(roomId);
+    if (!room) return cb?.({ error: 'Room not found' });
+
+    try {
+      room.messages = [];
+      // persist cleared messages array
+      try {
+        await RoomModel.findOneAndUpdate({ id: roomId }, { $set: { messages: [], lastActivity: new Date() } }, { upsert: true });
+      } catch (err) {
+        console.warn('Could not persist chat clear', err?.message || err);
+      }
+
+      io.to(roomId).emit('chat:cleared');
+      cb?.({ ok: true });
+    } catch (err) {
+      console.error('chat:clear failed', err);
+      cb?.({ error: err?.message || 'clear failed' });
+    }
+  });
+
   // Files & folders
   socket.on('folders:list', async ({ roomId }, cb) => {
     const room = rooms.get(roomId);
@@ -351,8 +378,10 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomId);
     if (!room) return cb?.({ error: 'Room not found' });
     room.files.delete(fileId);
+    // also remove any whiteboard snapshot for this file
+    try { room.whiteboards.delete(fileId); } catch (e) {}
     try {
-      await RoomModel.findOneAndUpdate({ id: roomId }, { $pull: { files: { id: fileId } } });
+      await RoomModel.findOneAndUpdate({ id: roomId }, { $pull: { files: { id: fileId } }, $set: { whiteboards: Array.from(room.whiteboards.values()) } });
     } catch (err) {
       console.warn('Could not persist file delete', err?.message || err);
     }
@@ -382,6 +411,30 @@ io.on('connection', (socket) => {
       cb?.({ ok: true, file });
     } catch (err) {
       console.error('file:rename failed', err);
+      cb?.({ error: err?.message || 'rename failed' });
+    }
+  });
+
+  socket.on('folder:rename', async ({ roomId, folderId, name } = {}, cb) => {
+    const room = rooms.get(roomId);
+    if (!room) return cb?.({ error: 'Room not found' });
+    if (!folderId || !name) return cb?.({ error: 'Missing folderId or name' });
+
+    const folder = room.folders.get(folderId);
+    if (!folder) return cb?.({ error: 'Folder not found' });
+
+    try {
+      folder.name = name;
+      // persist arrays for simplicity
+      try {
+        await RoomModel.findOneAndUpdate({ id: roomId }, { $set: { files: Array.from(room.files.values()), folders: Array.from(room.folders.values()), lastActivity: new Date() } }, { upsert: true });
+      } catch (err) {
+        console.warn('Could not persist folder rename', err?.message || err);
+      }
+      io.to(roomId).emit('folders:updated');
+      cb?.({ ok: true, folder });
+    } catch (err) {
+      console.error('folder:rename failed', err);
       cb?.({ error: err?.message || 'rename failed' });
     }
   });
@@ -495,8 +548,43 @@ io.on('connection', (socket) => {
   });
 
   // Whiteboard (broadcast primitive events; client should interpret)
-  socket.on('whiteboard:event', ({ roomId, event }) => {
-    socket.to(roomId).emit('whiteboard:event', event);
+  // Broadcast realtime whiteboard events to other clients. Each event should
+  // include a fileId so clients can filter events for the active file.
+  socket.on('whiteboard:event', ({ roomId, fileId, event } = {}) => {
+    try {
+      if (!roomId || !fileId || !event) return;
+      socket.to(roomId).emit('whiteboard:event', { fileId, event });
+    } catch (err) { console.warn('whiteboard:event handler error', err); }
+  });
+
+  // Save a snapshot of the whiteboard for a specific file (objects + meta).
+  socket.on('whiteboard:save', async ({ roomId, fileId, objects = [], meta = {} } = {}, cb) => {
+    const room = rooms.get(roomId);
+    if (!room) return cb?.({ error: 'Room not found' });
+    if (!fileId) return cb?.({ error: 'Missing fileId' });
+
+    try {
+      room.whiteboards.set(fileId, { fileId, objects, meta });
+      // persist whiteboards array
+      try {
+        await RoomModel.findOneAndUpdate({ id: roomId }, { $set: { whiteboards: Array.from(room.whiteboards.values()), lastActivity: new Date() } }, { upsert: true });
+      } catch (err) {
+        console.warn('Could not persist whiteboard save', err?.message || err);
+      }
+      cb?.({ ok: true });
+    } catch (err) {
+      console.error('whiteboard:save failed', err);
+      cb?.({ error: err?.message || 'save failed' });
+    }
+  });
+
+  // Retrieve the saved whiteboard snapshot for a file
+  socket.on('whiteboard:get', ({ roomId, fileId } = {}, cb) => {
+    const room = rooms.get(roomId);
+    if (!room) return cb?.({ objects: [], meta: {} });
+    const wb = room.whiteboards.get(fileId);
+    if (!wb) return cb?.({ objects: [], meta: {} });
+    cb?.({ objects: wb.objects || [], meta: wb.meta || {} });
   });
 
   // WebRTC signaling
