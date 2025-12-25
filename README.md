@@ -98,13 +98,14 @@ CodeCollab/
 ### Backend (`server/`)
 - **Express server** for REST API endpoints
 - **Socket.IO** for real-time bidirectional communication
-- **In-memory storage** for:
+- **MongoDB** for persistent data storage:
+  - User accounts and authentication
   - Rooms and sessions
   - Files and folder structure
-  - Chat messages
-  - User presence tracking
-
-> ⚠️ **Note:** Data is not persistent and will be lost on server restart
+  - Chat message history
+- **In-memory cache** for:
+  - Active user presence
+  - Real-time collaboration state
 
 ### Frontend (`client/`)
 - **React + Vite** for fast development and optimized builds
@@ -121,6 +122,7 @@ Before you begin, ensure you have the following installed:
 - **Node.js** v18 or higher ([Download](https://nodejs.org/))
 - **npm** (comes with Node.js)
 - **Git** ([Download](https://git-scm.com/))
+- **MongoDB** ([Download](https://www.mongodb.com/try/download/community)) or use [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) (free cloud database)
 
 ---
 
@@ -143,6 +145,26 @@ cd server
 npm install
 ```
 
+#### Configure Environment Variables
+
+Create a `.env` file in the `server` directory:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and add your configuration:
+
+```env
+PORT=4000
+MONGODB_URI=mongodb://localhost:27017/codecollab
+# OR use MongoDB Atlas:
+# MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/codecollab
+
+JWT_SECRET=your_jwt_secret_key_here
+NODE_ENV=development
+```
+
 #### Frontend Setup
 ```bash
 cd ../client
@@ -157,7 +179,22 @@ npm install
 
 Open **two terminal windows** and run the following commands:
 
-#### Terminal 1 - Start Backend Server
+#### Step 1 - Start MongoDB (if running locally)
+
+```bash
+# On macOS (using Homebrew)
+brew services start mongodb-community
+
+# On Windows
+net start MongoDB
+
+# On Linux
+sudo systemctl start mongod
+```
+
+> **Note:** Skip this step if you're using MongoDB Atlas (cloud database)
+
+#### Step 2 - Start Backend Server
 
 ```bash
 cd server
@@ -166,7 +203,7 @@ npm run dev
 
 ✅ Server will run at: **http://localhost:4000**
 
-#### Terminal 2 - Start Frontend Client
+#### Step 3 - Start Frontend Client
 
 ```bash
 cd client
@@ -208,6 +245,8 @@ echo "VITE_SERVER_URL=http://localhost:4000" > .env.local
 | ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white) | Runtime Environment |
 | ![Express](https://img.shields.io/badge/Express-000000?logo=express&logoColor=white) | Web Framework |
 | ![Socket.IO](https://img.shields.io/badge/Socket.IO-010101?logo=socket.io) | Real-time Communication |
+| ![MongoDB](https://img.shields.io/badge/MongoDB-47A248?logo=mongodb&logoColor=white) | Database |
+| ![Mongoose](https://img.shields.io/badge/Mongoose-880000?logo=mongoose&logoColor=white) | ODM |
 
 ### Development Tools
 - Git & GitHub
@@ -221,24 +260,25 @@ echo "VITE_SERVER_URL=http://localhost:4000" > .env.local
 
 | ⚠️ Issue | Description | Solution |
 |---------|-------------|----------|
-| **In-memory Storage** | Restarting server clears all rooms, files, and messages | Replace with MongoDB/PostgreSQL for persistence |
 | **WebRTC STUN Only** | Video calls may fail on restricted networks | Add TURN server for production use |
-| **No Authentication** | Anyone with room ID can join | Implement user accounts and authentication |
+| **Basic Authentication** | Simple JWT implementation without advanced security | Add OAuth, 2FA, and refresh tokens |
 | **Single Server** | No horizontal scaling support | Implement Redis adapter for Socket.IO |
+| **File Size Limits** | Large files may cause performance issues | Implement file size restrictions and chunking |
 
 ### Known Features
+- ✅ **MongoDB Integration** - Persistent storage for users, rooms, and files
 - ✅ **Auto-save enabled** - Editor changes are debounced and broadcast
 - ✅ **Whiteboard sync** - Drawing strokes synced via Socket.IO
 - ✅ **Room-based isolation** - Each room has separate file system
+- ✅ **User Authentication** - JWT-based authentication system
 
 ---
 
 ## 🚧 Future Improvements
 
 ### Planned Features
-- [ ] **Database Integration** - MongoDB/PostgreSQL for data persistence
-- [ ] **User Authentication** - Login/Signup with JWT
-- [ ] **Role-based Access** - Admin, Editor, Viewer permissions
+- [ ] **Enhanced Authentication** - OAuth integration (Google, GitHub)
+- [ ] **Role-based Access Control** - Admin, Editor, Viewer permissions
 - [ ] **Code Execution** - Run code directly in browser
 - [ ] **TURN Server** - Reliable video calls in all networks
 - [ ] **File Upload/Download** - Import/export projects
@@ -246,12 +286,15 @@ echo "VITE_SERVER_URL=http://localhost:4000" > .env.local
 - [ ] **Git Integration** - Version control within the editor
 - [ ] **Themes** - Dark/Light mode customization
 - [ ] **Mobile Responsive** - Better mobile experience
+- [ ] **Search & Replace** - Advanced code search functionality
 
 ### Performance Enhancements
 - [ ] Redis for Socket.IO scaling
 - [ ] WebSocket compression
 - [ ] Code splitting and lazy loading
 - [ ] Service worker for offline support
+- [ ] Database indexing optimization
+- [ ] CDN integration for static assets
 
 ---
 
@@ -282,10 +325,6 @@ Contributions are welcome! Please follow these steps:
 
 ---
 
-## 📄 License
-
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
-
 ---
 
 ## 👤 Author
@@ -293,7 +332,6 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 **Sanket Mistry**
 
 - GitHub: [@Sanketmis208](https://github.com/Sanketmis208)
-- LinkedIn: [Add your LinkedIn]
 
 ---
 
