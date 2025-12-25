@@ -61,12 +61,12 @@ export default function Preview({ language = 'html', content = '', fileName = 'f
 
   const run = async () => {
     if (isRunning) return;
-    
+
     runIdRef.current += 1;
     const rid = runIdRef.current;
     setIsRunning(true);
     clearLogs();
-    
+
     if (!content) {
       addLog('info', '📝 No content to run');
       setIsRunning(false);
@@ -227,67 +227,59 @@ export default function Preview({ language = 'html', content = '', fileName = 'f
 
       {/* Main Content */}
       <div className="flex-1 min-h-0 flex">
-        {/* Preview Area */}
         {showPreview ? (
-          <div className="flex-1 h-full border-r border-slate-700/50 relative p-2 min-w-0">
-            <div className="absolute inset-0 bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center rounded-lg overflow-hidden">
-              <div className="text-center text-slate-500">
-                <svg className="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          <div className="flex-1 h-full relative p-2 min-w-0">
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-900 to-slate-800 flex items-stretch rounded-lg overflow-hidden">
+              <iframe
+                ref={iframeRef}
+                title="preview"
+                sandbox="allow-scripts"
+                className="w-full h-full bg-white relative z-10"
+                style={{ boxSizing: 'border-box', display: 'block', border: 'none' }}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 h-full flex flex-col bg-slate-800/50 backdrop-blur-sm p-3">
+            <div className="flex items-center justify-between p-0 mb-3 border-b border-slate-700/30">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+                <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                <p className="text-sm">Preview will appear here</p>
+                Console Output
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-400">
+                <span>{logs.length} messages</span>
+                {logs.length > 0 && (
+                  <button
+                    onClick={clearLogs}
+                    className="w-6 h-6 rounded hover:bg-slate-700/50 flex items-center justify-center transition-colors"
+                    title="Clear all"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
               </div>
             </div>
-            <iframe 
-              ref={iframeRef} 
-              title="preview" 
-              sandbox="allow-scripts" 
-              className="w-full h-full bg-white relative z-10 rounded-lg shadow-xl" 
-              style={{ boxSizing: 'border-box', display: 'block' }}
-            />
-          </div>
-        ) : null}
 
-        {/* Console Panel */}
-        <div className={`${showPreview ? 'w-96' : 'flex-1'} h-full flex flex-col border-l border-slate-700/50 bg-slate-800/50 backdrop-blur-sm`}>
-          <div className="flex items-center justify-between p-3 border-b border-slate-700/50">
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
-              <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              Console Output
-            </div>
-            <div className="flex items-center gap-2 text-xs text-slate-400">
-              <span>{logs.length} messages</span>
-              {logs.length > 0 && (
-                <button
-                  onClick={clearLogs}
-                  className="w-6 h-6 rounded hover:bg-slate-700/50 flex items-center justify-center transition-colors"
-                  title="Clear all"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <div className="flex-1 overflow-auto">
+              {logs.length === 0 ? (
+                <div className="text-center text-slate-500 py-8">
+                  <svg className="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
-                </button>
+                  <p className="text-sm">Console output will appear here</p>
+                </div>
+              ) : (
+                <pre className="p-3 rounded-lg border text-sm font-mono whitespace-pre-wrap bg-slate-900 text-slate-100" style={{ whiteSpace: 'pre-wrap' }}>
+                  {allLogsText}
+                </pre>
               )}
             </div>
           </div>
-          
-          <div className="flex-1 overflow-auto p-3">
-            {logs.length === 0 ? (
-              <div className="text-center text-slate-500 py-8">
-                <svg className="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                <p className="text-sm">Console output will appear here</p>
-              </div>
-            ) : (
-              <pre className="p-3 rounded-lg border text-sm font-mono whitespace-pre-wrap bg-slate-900 text-slate-100" style={{ whiteSpace: 'pre-wrap' }}>
-                {allLogsText}
-              </pre>
-            )}
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
